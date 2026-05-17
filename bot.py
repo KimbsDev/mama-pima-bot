@@ -83,7 +83,7 @@ def ask_mama_pima(user_id, message):
 
 
 def send_meta_reply(to, message):
-    """Send reply back to customer via Meta Cloud API (FREE!)"""
+    """Send reply back to customer via Meta Cloud API"""
     url = f"https://graph.facebook.com/v18.0/{PHONE_NUMBER_ID}/messages"
     headers = {
         "Authorization": f"Bearer {WHATSAPP_TOKEN}",
@@ -99,11 +99,12 @@ def send_meta_reply(to, message):
     print(f"📤 Meta API response: {response.status_code}")
 
 
-# ── COMBINED Webhook Route (GET for verification, POST for messages) ──
+# ── Combined Webhook Route ──
 @app.route("/webhook", methods=["GET", "POST"])
 def webhook():
+
+    # ── GET: Webhook Verification (Meta checks this first) ──
     if request.method == "GET":
-        # Webhook Verification (Meta checks this first)
         mode = request.args.get("hub.mode")
         token = request.args.get("hub.verify_token")
         challenge = request.args.get("hub.challenge")
@@ -115,8 +116,8 @@ def webhook():
             print("❌ Webhook verification failed!")
             return "Forbidden", 403
 
+    # ── POST: Receive Messages from WhatsApp ──
     elif request.method == "POST":
-        # Receive Messages from WhatsApp
         try:
             data = request.get_json()
 
@@ -162,5 +163,5 @@ if __name__ == "__main__":
     print(f"🍽️  {restaurant['restaurant_name']} WhatsApp Bot is running!")
     print("🌐 Server started!")
     print("📊 Dashboard: /dashboard")
-    port = int(os.environ.get("PORT", 5000))
+    port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port, debug=False)
