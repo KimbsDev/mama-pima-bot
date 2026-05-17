@@ -1,8 +1,7 @@
 import json
 import requests
 from flask import Flask, request
-from twilio.rest import Client
-from config import OPENROUTER_API_KEY, TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN
+from config import OPENROUTER_API_KEY, WHATSAPP_TOKEN, PHONE_NUMBER_ID, VERIFY_TOKEN
 from database import init_db
 from accounts import handle_client_message
 from dashboard import dashboard
@@ -82,23 +81,60 @@ def ask_mama_pima(user_id, message):
     return reply
 
 
-def send_twilio_reply(to, message):
-    client = Client(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
-    client.messages.create(
-        from_="whatsapp:+14155238886",
-        body=message,
-        to=f"whatsapp:{to}"
-    )
+def send_meta_reply(to, message):
+    """Send reply back to customer via Meta Cloud API (FREE!)"""
+    url = f"https://graph.facebook.com/v18.0/{PHONE_NUMBER_ID}/messages"
+    headers = {
+        "Authorization": f"Bearer {WHATSAPP_TOKEN}",
+        "Content-Type": "application/json"
+    }
+    payload = {
+        "messaging_product": "whatsapp",
+        "to": to,
+        "type": "text",
+        "text": {"body": message}
+    }
+    response = requests.post(url, headers=headers, json=payload)
+    print(f"📤 Meta API response: {response.status_code}")
 
 
+# ── Webhook Verification (Meta checks this first) ──
+@app.route("/webhook", methods=["GET"])
+def verify_webhook():
+    mode = request.args.get("hub.mode")
+    token = request.args.get("hub.verify_token")
+    challenge = request.args.get("hub.challenge")
+
+    if mode == "subscribe" and token == VERIFY_TOKEN:
+        print("✅ Webhook verified by Meta!")
+        return challenge, 200
+    else:
+        print("❌ Webhook verification failed!")
+        return "Forbidden", 403
+
+
+# ── Receive Messages from WhatsApp ──
 @app.route("/webhook", methods=["POST"])
 def receive_message():
     try:
-        sender = request.form.get("From", "").replace("whatsapp:", "")
-        text = request.form.get("Body", "")
+        data = request.get_json()
 
-        if not text:
+        entry = data["entry"][0]
+        changes = entry["changes"][0]
+        value = changes["value"]
+
+        # Ignore non-message events
+        if "messages" not in value:
             return "ok", 200
+
+        message = value["messages"][0]
+
+        # Only handle text messages
+        if message.get("type") != "text":
+            return "ok", 200
+
+        sender = message["from"]
+        text = message["text"]["body"]
 
         print(f"📩 From {sender}: {text}")
 
@@ -107,13 +143,13 @@ def receive_message():
             reply = handle_client_message(OWNER_CLIENT_ID, text)
             if reply:
                 print(f"💼 Owner accounting reply: {reply}")
-                send_twilio_reply(sender, reply)
+                send_meta_reply(sender, reply)
                 return "ok", 200
 
         # Otherwise treat as customer message
         reply = ask_mama_pima(sender, text)
         print(f"🤖 Reply: {reply}")
-        send_twilio_reply(sender, reply)
+        send_meta_reply(sender, reply)
 
     except Exception as e:
         print(f"Error: {e}")
