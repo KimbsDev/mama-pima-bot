@@ -99,63 +99,63 @@ def send_meta_reply(to, message):
     print(f"📤 Meta API response: {response.status_code}")
 
 
-# ── Webhook Verification (Meta checks this first) ──
-@app.route("/webhook", methods=["GET"])
-def verify_webhook():
-    mode = request.args.get("hub.mode")
-    token = request.args.get("hub.verify_token")
-    challenge = request.args.get("hub.challenge")
+# ── COMBINED Webhook Route (GET for verification, POST for messages) ──
+@app.route("/webhook", methods=["GET", "POST"])
+def webhook():
+    if request.method == "GET":
+        # Webhook Verification (Meta checks this first)
+        mode = request.args.get("hub.mode")
+        token = request.args.get("hub.verify_token")
+        challenge = request.args.get("hub.challenge")
 
-    if mode == "subscribe" and token == VERIFY_TOKEN:
-        print("✅ Webhook verified by Meta!")
-        return challenge, 200
-    else:
-        print("❌ Webhook verification failed!")
-        return "Forbidden", 403
+        if mode == "subscribe" and token == VERIFY_TOKEN:
+            print("✅ Webhook verified by Meta!")
+            return challenge, 200
+        else:
+            print("❌ Webhook verification failed!")
+            return "Forbidden", 403
 
+    elif request.method == "POST":
+        # Receive Messages from WhatsApp
+        try:
+            data = request.get_json()
 
-# ── Receive Messages from WhatsApp ──
-@app.route("/webhook", methods=["POST"])
-def receive_message():
-    try:
-        data = request.get_json()
+            entry = data["entry"][0]
+            changes = entry["changes"][0]
+            value = changes["value"]
 
-        entry = data["entry"][0]
-        changes = entry["changes"][0]
-        value = changes["value"]
-
-        # Ignore non-message events
-        if "messages" not in value:
-            return "ok", 200
-
-        message = value["messages"][0]
-
-        # Only handle text messages
-        if message.get("type") != "text":
-            return "ok", 200
-
-        sender = message["from"]
-        text = message["text"]["body"]
-
-        print(f"📩 From {sender}: {text}")
-
-        # Check if message is from the OWNER (business accounting)
-        if sender == OWNER_PHONE:
-            reply = handle_client_message(OWNER_CLIENT_ID, text)
-            if reply:
-                print(f"💼 Owner accounting reply: {reply}")
-                send_meta_reply(sender, reply)
+            # Ignore non-message events
+            if "messages" not in value:
                 return "ok", 200
 
-        # Otherwise treat as customer message
-        reply = ask_mama_pima(sender, text)
-        print(f"🤖 Reply: {reply}")
-        send_meta_reply(sender, reply)
+            message = value["messages"][0]
 
-    except Exception as e:
-        print(f"Error: {e}")
+            # Only handle text messages
+            if message.get("type") != "text":
+                return "ok", 200
 
-    return "ok", 200
+            sender = message["from"]
+            text = message["text"]["body"]
+
+            print(f"📩 From {sender}: {text}")
+
+            # Check if message is from the OWNER (business accounting)
+            if sender == OWNER_PHONE:
+                reply = handle_client_message(OWNER_CLIENT_ID, text)
+                if reply:
+                    print(f"💼 Owner accounting reply: {reply}")
+                    send_meta_reply(sender, reply)
+                    return "ok", 200
+
+            # Otherwise treat as customer message
+            reply = ask_mama_pima(sender, text)
+            print(f"🤖 Reply: {reply}")
+            send_meta_reply(sender, reply)
+
+        except Exception as e:
+            print(f"Error: {e}")
+
+        return "ok", 200
 
 
 if __name__ == "__main__":
