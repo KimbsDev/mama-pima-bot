@@ -1,4 +1,5 @@
 import json
+import os
 import requests
 from flask import Flask, request
 from config import OPENROUTER_API_KEY, WHATSAPP_TOKEN, PHONE_NUMBER_ID, VERIFY_TOKEN
@@ -159,6 +160,7 @@ def receive_message():
 
 if __name__ == "__main__":
     print(f"🍽️  {restaurant['restaurant_name']} WhatsApp Bot is running!")
-    print("🌐 Server started on http://localhost:5000")
-    print("📊 Dashboard: http://localhost:5000/dashboard")
-    app.run(port=5000, debug=True)
+    print("🌐 Server started!")
+    print("📊 Dashboard: /dashboard")
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port, debug=False)
